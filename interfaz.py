@@ -1,0 +1,526 @@
+import wx
+import time
+import random
+from pygame import mixer
+mixer.init()
+try:
+    import winsound
+except Exception:
+    winsound = None
+
+AUDIO_GAME = "audio_snake.mp3"
+
+class Escenario:
+    def __init__(self):
+        # Escenario contiene instancias de los personajes y los puntos de recompensa
+        # usar nombres en minúsculas para consistencia
+        self.caballero = Caballero(250, 200, 500, 100)
+        self.monstruo = Monstruo(150, 100, 500, 100)
+        self.curador = Curador(350, 300, 500, 50)
+        # lista de recompensas: cada una es un dict {'x': int, 'y': int, 'valor': int}
+        self.recompensa = []
+        self.crear_recompensa(3)
+        # puntos por jugador (separados)
+        self.puntos_caballero = 0
+        self.puntos_curador = 0
+        self.ultimo_recogido = None  # (valor, quien, timestamp)
+        # puntos negros que benefician al monstruo
+        self.puntos_negros = []
+        self.crear_puntos_negros(2)
+        self.ultimo_punto_negro = None  # (incremento, timestamp)
+        # para efectos visuales
+        self.ultimo_recogido_pos = None
+        self.ultimo_punto_negro_pos = None
+        
+    def crear_recompensa(self, cantidad):
+        """Crear `cantidad` recompensas en posiciones aleatorias dentro del área visible.
+        Cada recompensa tiene un valor (puntos) pequeño.
+        """
+        ancho = 480
+        alto = 365
+        self.recompensa = []
+        for _ in range(cantidad):
+            self.recompensa.append(self.crear_una_recompensa())
+
+    def crear_una_recompensa(self):
+        """Genera y retorna una recompensa aleatoria (dict)."""
+        ancho = 480
+        alto = 365
+        x = random.randint(20, ancho - 20)
+        y = random.randint(20, alto - 20)
+        valor = random.choice([5, 10, 15])
+        return {'x': x, 'y': y, 'valor': valor}
+
+    def crear_un_punto_negro(self):
+        """Genera y retorna un punto negro que da beneficios al monstruo."""
+        ancho = 480
+        alto = 365
+        x = random.randint(20, ancho - 20)
+        y = random.randint(20, alto - 20)
+        incremento = random.choice([30, 50, 70])  # vida que añadirá
+        return {'x': x, 'y': y, 'inc': incremento}
+
+    def crear_puntos_negros(self, cantidad):
+        self.puntos_negros = []
+        for _ in range(cantidad):
+            self.puntos_negros.append(self.crear_un_punto_negro())
+
+    def detectar_colision(self, obj1, obj2):
+        """Detecta colisión aproximada entre dos objetos con atributos posicion_x y posicion_y.
+        Retorna True si la distancia euclidiana es menor o igual a 15 píxeles.
+        """
+        try:
+            dx = obj1.posicion_x - obj2['x'] if isinstance(obj2, dict) else obj1.posicion_x - obj2.posicion_x
+            dy = obj1.posicion_y - obj2['y'] if isinstance(obj2, dict) else obj1.posicion_y - obj2.posicion_y
+        except Exception:
+            return False
+        distancia2 = dx * dx + dy * dy
+        return distancia2 <= (15 * 15)
+
+    def manejar_colisiones(self):
+        """Revisar colisiones entre Caballero/Curador y las recompensas.
+        Si hay colisión, sumar puntos y eliminar la recompensa.
+        """
+        # Recorremos por índice para poder reemplazar recompensas consumidas
+        for i in range(len(self.recompensa)):
+            rec = self.recompensa[i]
+            if self.detectar_colision(self.caballero, rec):
+                # puntos para caballero
+                self.puntos_caballero += rec['valor']
+                # aumentar vida del caballero
+                self.caballero.vida = min(500, self.caballero.vida + rec['valor'])
+                # además aumentar defensa del caballero ligeramente según el valor de la recompensa
+                incremento_def = rec['valor'] // 2  # por ejemplo la mitad del valor
+                if hasattr(self.caballero, 'defensa'):
+                    self.caballero.defensa = min(300, self.caballero.defensa + incremento_def)
+                # registrar último recogido para mostrar mensaje (valor, quien, timestamp)
+                # registrar último recogido para mostrar mensaje (valor, quien, timestamp)
+                self.ultimo_recogido = (rec['valor'], 'Caballero', time.time())
+                # posición para efecto visual
+                self.ultimo_recogido_pos = (rec['x'], rec['y'])
+                # sonido
+                try:
+                    if winsound:
+                        winsound.Beep(1000, 120)
+                except Exception:
+                    pass
+                # reemplazar la recompensa consumida por una nueva aleatoria
+                self.recompensa[i] = self.crear_una_recompensa()
+            elif self.detectar_colision(self.curador, rec):
+                # puntos para curador
+                self.puntos_curador += rec['valor']
+                # aumentar vida del curador
+                self.curador.vida = min(500, self.curador.vida + rec['valor']//2)
+                # además aumentar el poder de curacion del curador
+                incremento_cur = rec['valor'] // 2
+                if hasattr(self.curador, 'poder_curacion'):
+                    self.curador.poder_curacion = min(200, self.curador.poder_curacion + incremento_cur)
+                self.ultimo_recogido = (rec['valor'], 'Curador', time.time())
+                self.ultimo_recogido_pos = (rec['x'], rec['y'])
+                try:
+                    if winsound:
+                        winsound.Beep(1000, 120)
+                except Exception:
+                    pass
+                self.recompensa[i] = self.crear_una_recompensa()
+
+        # manejar colisiones entre el monstruo y los puntos negros
+        for j in range(len(self.puntos_negros)):
+            pn = self.puntos_negros[j]
+            if self.detectar_colision(self.monstruo, pn):
+                inc = pn['inc']
+                # aumentar vida del monstruo
+                self.monstruo.vida = self.monstruo.vida + inc
+                # opcional: cap máximo para evitar valores extremos
+                if self.monstruo.vida > 2000:
+                    self.monstruo.vida = 2000
+                # registrar para mostrar mensaje en la vista
+                self.ultimo_punto_negro = (inc, time.time())
+                self.ultimo_punto_negro_pos = (pn['x'], pn['y'])
+                # sonido diferente
+                try:
+                    if winsound:
+                        winsound.Beep(650, 180)
+                except Exception:
+                    pass
+                # reemplazar el punto negro por uno nuevo
+                self.puntos_negros[j] = self.crear_un_punto_negro()
+
+class Personaje:
+    def __init__(self, x, y, vida):
+        self.posicion_x = x
+        self.posicion_y = y
+        self.vida = vida
+        self.salto = 5
+
+    def mover_arriba(self):
+        if (self.posicion_y > 0):
+            self.posicion_y -= self.salto
+        else:
+            self.posicion_y = 200
+
+    def mover_abajo(self):
+        if (self.posicion_y < 365):
+            self.posicion_y += self.salto
+        else:
+            self.posicion_y = 200
+
+    def mover_izquierda(self):
+        if (self.posicion_x > 0):
+            self.posicion_x -= self.salto
+        else:
+            self.posicion_x = 250
+
+    def mover_derecha(self):
+        if (self.posicion_x < 480):
+            self.posicion_x += self.salto
+        else:
+            self.posicion_x = 250
+
+class Monstruo(Personaje):
+    def __init__(self, x, y, vida, poder):
+        super().__init__(x, y, vida)
+        self.poder = poder
+        
+    def atacar_caballero(self, caballero):
+        if (self.poder < caballero.vida):
+            caballero.vida = caballero.vida - self.poder
+        else:
+            caballero.vida = 0
+            print("El caballero ha muerto")
+
+
+class Caballero(Personaje):
+    def __init__(self, x, y, vida, defensa):
+        super().__init__(x, y, vida)
+        self.defensa = defensa
+        
+    def atacar_monstruo(self, monstruo):
+        if (self.defensa < monstruo.vida):
+            monstruo.vida = monstruo.vida - self.defensa
+        else:
+            monstruo.vida = 0
+            print("El monstruo ha muerto")
+            
+class Curador(Personaje):
+    def __init__(self, x, y, vida, poder_curacion):
+        super().__init__(x, y, vida)
+        self.poder_curacion = poder_curacion
+        
+    def curar_caballero(self, caballero):
+        caballero.vida = caballero.vida + self.poder_curacion
+        if (caballero.vida > 500):
+            caballero.vida = 500
+        else:
+            print("El caballero ha sido curado")
+    
+    def envenenar_monstruo(self, monstruo):
+        if (self.poder_curacion < monstruo.vida):
+            monstruo.vida = monstruo.vida - self.poder_curacion
+        else:
+            monstruo.vida = 0
+            print("El monstruo ha muerto")
+            
+class VistaSimple:
+    def __init__(self):
+        self.app = wx.App()
+        # esta usando objetos visuales de wxPython
+        self.ventana = wx.Frame(None, title="Juego", size=wx.Size(500, 400))
+        self.panel = wx.Panel(self.ventana)
+        # reutilizando los eventos de teclado y de dibujar en pantalla
+        # Usar EVT_CHAR_HOOK en el frame garantiza recibir teclas especiales (flechas, etc.) incluso si el foco
+        # está en controles distintos. También mantenemos EVT_KEY_DOWN en el panel por compatibilidad.
+        self.ventana.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)
+        self.panel.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
+        # Si el usuario hace clic en el panel, devolver el foco al panel para que reciba eventos de teclado
+        self.panel.Bind(wx.EVT_LEFT_DOWN, lambda e: self.panel.SetFocus())
+        # evento de pintado
+        self.panel.Bind(wx.EVT_PAINT, self.on_paint)
+
+        # Logica del juego: usar la clase Escenario para unificar estado
+        # reset_game creará la instancia de Escenario
+        self.reset_game()
+
+        # bandera de estado de juego (Game Over)
+        self.game_over = False
+        self.who_died = None
+        # --------------------------------
+        self.instrucciones = wx.StaticText(self.panel, label="Usa las teclas para mover a los personajes", pos=wx.Point(10, 10))
+        self.instrucciones.SetForegroundColour(wx.Colour(0, 0, 255))
+
+        # Mostrar la ventana antes de pedir foco al panel
+        self.ventana.Centre()
+        self.ventana.Show()
+        # Aseguramos que el panel tenga el foco para recibir eventos de teclado
+        self.panel.SetFocus()
+        # bandera/temporizador para indicar si mostrar el mensaje de contacto
+        # usamos un temporizador (timestamp) para que el texto permanezca visible
+        # durante un corto periodo tras detectar contacto
+        self.mostrar_mensaje_contacto = False
+        self.mensaje_contacto_until = 0.0  # timestamp unix en segundos
+        # umbral (en píxeles) para considerar "contacto" con un punto
+        self.contact_threshold = 10
+
+    def reset_game(self):
+        """Restablece el estado inicial del juego (personajes)."""
+        # recrear escenario
+        self.escenario = Escenario()
+        # propagar atributos a nivel de vista para compatibilidad
+        self.caballero = self.escenario.caballero
+        self.monstruo = self.escenario.monstruo
+        self.curador = self.escenario.curador
+        self.game_over = False
+        self.who_died = None
+        # bandera que indica victoria (monstruo muerto)
+        self.victoria = False
+    
+    def on_paint(self, event):
+        dc = wx.PaintDC(self.panel)
+        dc.SetBackground(wx.Brush(wx.Colour(255, 255, 255)))
+        dc.Clear()
+
+        # Mostrar posición del caballero/monstruo/curador
+        dc.DrawText(f"X: {self.escenario.caballero.posicion_x}, Y: {self.escenario.caballero.posicion_y}", 400, 40)
+        dc.DrawText(f"X: {self.escenario.monstruo.posicion_x}, Y: {self.escenario.monstruo.posicion_y}", 400, 60)
+        dc.DrawText(f"X: {self.escenario.curador.posicion_x}, Y: {self.escenario.curador.posicion_y}", 400, 80)
+
+        # Dibujar caballero - Verde que se opaca con la pérdida de vida
+        vida_porcentaje = self.escenario.caballero.vida / 500  # 500 es la vida máxima
+        color_verde = max(0, min(255, int(255 * vida_porcentaje)))
+        dc.SetBrush(wx.Brush(wx.Colour(0, color_verde, 0)))
+        dc.DrawCircle(self.escenario.caballero.posicion_x, self.escenario.caballero.posicion_y, 20)
+
+        # Dibujar monstruo - Rojo que se opaca con la pérdida de vida
+        vida_porcentaje = self.escenario.monstruo.vida / 500
+        color_rojo = max(0, min(255, int(255 * vida_porcentaje)))
+        dc.SetBrush(wx.Brush(wx.Colour(color_rojo, 0, 0)))
+        # variar el radio del monstruo según su vida (más vida -> mayor tamaño)
+        radio_monstruo = 20 + int(self.escenario.monstruo.vida / 200)
+        dc.DrawCircle(self.escenario.monstruo.posicion_x, self.escenario.monstruo.posicion_y, radio_monstruo)
+
+        # Dibujar curador - Azul que se opaca con la pérdida de vida
+        vida_porcentaje = self.escenario.curador.vida / 500
+        color_azul = max(0, min(255, int(255 * vida_porcentaje)))
+        dc.SetBrush(wx.Brush(wx.Colour(0, 0, color_azul)))
+        dc.DrawCircle(self.escenario.curador.posicion_x, self.escenario.curador.posicion_y, 20)
+
+        # Dibujar recompensas actuales
+        for rec in self.escenario.recompensa:
+            dc.SetBrush(wx.Brush(wx.Colour(255, 215, 0)))  # dorado
+            dc.DrawCircle(rec['x'], rec['y'], 6)
+
+        # Dibujar puntos negros (beneficio para el monstruo)
+        for pn in self.escenario.puntos_negros:
+            dc.SetBrush(wx.Brush(wx.Colour(0, 0, 0)))
+            dc.DrawCircle(pn['x'], pn['y'], 6)
+        # Efecto visual: círculo expandiéndose al recoger recompensa
+        if self.escenario.ultimo_recogido_pos and self.escenario.ultimo_recogido:
+            _, _, ts = self.escenario.ultimo_recogido
+            if time.time() - ts < 0.6:
+                elapsed = time.time() - ts
+                rx = int(6 + elapsed * 50)
+                x, y = self.escenario.ultimo_recogido_pos
+                try:
+                    dc.SetPen(wx.Pen(wx.Colour(255, 0, 255), 2))
+                    dc.SetBrush(wx.Brush(wx.Colour(255, 0, 255, 50)))
+                except Exception:
+                    dc.SetBrush(wx.Brush(wx.Colour(255, 0, 255)))
+                dc.DrawCircle(x, y, rx)
+
+        # Mostrar mensaje temporal si se recogió una recompensa recientemente
+        if self.escenario.ultimo_recogido:
+            valor, quien, ts = self.escenario.ultimo_recogido
+            if time.time() - ts < 1.0:
+                dc.SetTextForeground(wx.Colour(255, 0, 255))
+                dc.DrawText(f"{quien} +{valor} pts!", 250, 10)
+            else:
+                self.escenario.ultimo_recogido = None
+
+        # Mostrar mensaje temporal si el monstruo comió un punto negro
+        if self.escenario.ultimo_punto_negro:
+            inc, ts2 = self.escenario.ultimo_punto_negro
+            if time.time() - ts2 < 1.0:
+                dc.SetTextForeground(wx.Colour(0, 0, 0))
+                dc.DrawText(f"Monstruo +{inc} vida!", 250, 30)
+            else:
+                self.escenario.ultimo_punto_negro = None
+
+        # Efecto visual: círculo expandiéndose cuando el monstruo come el punto negro
+        if self.escenario.ultimo_punto_negro_pos and self.escenario.ultimo_punto_negro:
+            _, tsn = self.escenario.ultimo_punto_negro
+            if time.time() - tsn < 0.8:
+                elapsed = time.time() - tsn
+                rx = int(8 + elapsed * 60)
+                x, y = self.escenario.ultimo_punto_negro_pos
+                try:
+                    dc.SetPen(wx.Pen(wx.Colour(0, 0, 0), 2))
+                    dc.SetBrush(wx.Brush(wx.Colour(0, 0, 0, 40)))
+                except Exception:
+                    dc.SetBrush(wx.Brush(wx.Colour(0, 0, 0)))
+                dc.DrawCircle(x, y, rx)
+
+    # Mostrar vidas y puntos
+        dc.SetTextForeground(wx.Colour(0, 0, 0))
+        dc.DrawText(f"Vida Caballero: {self.escenario.caballero.vida}", 10, 60)
+        dc.DrawText(f"Vida Monstruo: {self.escenario.monstruo.vida}", 10, 40)
+        dc.DrawText(f"Vida Curador: {self.escenario.curador.vida}", 10, 80)
+        dc.DrawText(f"Puntos Caballero: {self.escenario.puntos_caballero}", 10, 180)
+        dc.DrawText(f"Puntos Curador: {self.escenario.puntos_curador}", 10, 200)
+
+        # Mostrar instrucciones de ataque y curacion
+        dc.DrawText("WASD: Mover Caballero, X: Atacar Monstruo", 10, 100)
+        dc.DrawText("Flechas: Mover Curador, Y: Curar Caballero, T: Envenenar Monstruo", 10, 120)
+        dc.DrawText("IJKL: Mover Monstruo, M: Atacar Caballero, N: Atacar Curador", 10, 140)
+        dc.DrawText("ESC: Salir", 10, 160)
+
+        # Si el juego terminó mostrar pantalla Game Over o Victoria encima
+        if self.game_over:
+            try:
+                overlay_brush = wx.Brush(wx.Colour(0, 0, 0, 120))
+            except Exception:
+                overlay_brush = wx.Brush(wx.Colour(0, 0, 0))
+            dc.SetBrush(overlay_brush)
+            w, h = self.panel.GetSize()
+            dc.DrawRectangle(0, 0, w, h)
+            font = wx.Font(28, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+            dc.SetFont(font)
+            if self.who_died == 'Monstruo' or getattr(self, 'victoria', False):
+                dc.SetTextForeground(wx.Colour(0, 200, 0))
+                msg = "¡VICTORIA!"
+            else:
+                dc.SetTextForeground(wx.Colour(255, 0, 0))
+                msg = "GAME OVER"
+            tw, th = dc.GetTextExtent(msg)
+            dc.DrawText(msg, (w - tw) // 2, (h - th) // 2 - 20)
+            font2 = wx.Font(12, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+            dc.SetFont(font2)
+            dc.SetTextForeground(wx.Colour(255, 255, 255))
+            if self.who_died == 'Monstruo' or getattr(self, 'victoria', False):
+                sub = "Has derrotado al monstruo"
+            else:
+                sub = f"Ha muerto: {self.who_died}" if self.who_died else ""
+            s2 = "Presiona R para reiniciar o ESC para salir"
+            sw, sh = dc.GetTextExtent(sub)
+            s2w, s2h = dc.GetTextExtent(s2)
+            dc.DrawText(sub, (w - sw) // 2, (h - sh) // 2 + 10)
+            dc.DrawText(s2, (w - s2w) // 2, (h - s2h) // 2 + 30)
+            
+    def sound(self, archivo):
+        mixer.music.load(archivo)
+        mixer.music.play(loops=0)
+
+    def on_key_down(self, event):
+        keycode = event.GetKeyCode()
+        print(f"Tecla presionada: {keycode} ({chr(keycode) if 32 <= keycode <= 126 else ''})")
+        # Si estamos en Game Over, aceptar sólo reinicio o salir
+        if self.game_over:
+            if keycode == ord('R') or keycode == ord('r'):
+                print("Reiniciando juego...")
+                self.reset_game()
+                self.panel.Refresh()
+                return
+            elif keycode == wx.WXK_ESCAPE:
+                self.ventana.Close()
+                return
+            else:
+                return
+        elif keycode == ord('W') or keycode == ord('w'):
+            self.escenario.caballero.mover_arriba()
+            self.sound(AUDIO_GAME)
+        elif keycode == ord('S') or keycode == ord('s'):
+            self.escenario.caballero.mover_abajo()
+            self.sound(AUDIO_GAME)
+        elif keycode == ord('A') or keycode == ord('a'):
+            self.escenario.caballero.mover_izquierda()
+            self.sound(AUDIO_GAME)
+        elif keycode == ord('D') or keycode == ord('d'):
+            self.escenario.caballero.mover_derecha()
+            self.sound(AUDIO_GAME)
+            self.escenario.caballero.mover_derecha()
+            self.sound("audio_snake.mp3")
+        elif keycode == ord('X') or keycode == ord('x'):
+            self.escenario.caballero.atacar_monstruo(self.escenario.monstruo)
+        elif keycode == wx.WXK_UP:
+            print("Flecha Arriba!")
+            self.escenario.curador.mover_arriba()
+        elif keycode == wx.WXK_DOWN:
+            print("Flecha Abajo!")
+            self.escenario.curador.mover_abajo()
+        elif keycode == wx.WXK_LEFT:
+            print("Flecha Izquierda!")
+            self.escenario.curador.mover_izquierda()
+        elif keycode == wx.WXK_RIGHT:
+            print("Flecha Derecha!")
+            self.escenario.curador.mover_derecha()
+        elif keycode == ord('Y') or keycode == ord('y'):
+            self.escenario.curador.curar_caballero(self.escenario.caballero)
+        elif keycode == ord('T') or keycode == ord('t'):
+            self.escenario.curador.envenenar_monstruo(self.escenario.monstruo)
+        elif keycode == ord('I') or keycode == ord('i'):
+            self.escenario.monstruo.mover_arriba()
+        elif keycode == ord('K') or keycode == ord('k'):
+            self.escenario.monstruo.mover_abajo()
+        elif keycode == ord('J') or keycode == ord('j'):
+            self.escenario.monstruo.mover_izquierda()
+        elif keycode == ord('L') or keycode == ord('l'):
+            self.escenario.monstruo.mover_derecha()
+        elif keycode == ord('M') or keycode == ord('m'):
+            self.escenario.monstruo.atacar_caballero(self.escenario.caballero)
+        elif keycode == ord('N') or keycode == ord('n'):
+            self.escenario.monstruo.atacar_caballero(self.escenario.curador)
+        elif keycode == wx.WXK_ESCAPE:
+            self.ventana.Close()
+            return
+        # después de cada acción del jugador, manejar colisiones y actualizar estado
+        try:
+            self.escenario.manejar_colisiones()
+        except Exception:
+            pass
+        self.panel.Refresh()
+        # Comprobar si alguno murió después de la acción
+        # sincronizar referencias de personajes
+        self.caballero = self.escenario.caballero
+        self.monstruo = self.escenario.monstruo
+        self.curador = self.escenario.curador
+        self.check_game_over()
+        event.Skip()
+
+    def check_game_over(self):
+        """
+        Regla: si el monstruo muere -> VICTORIA.
+               si el caballero o el curador mueren -> GAME OVER.
+        """
+        # Prioridad: victoria si el monstruo muere
+        if self.escenario.monstruo.vida <= 0:
+            self.game_over = True
+            self.who_died = "Monstruo"
+            self.victoria = True
+            print("Victoria: Monstruo muerto")
+            return
+
+        # Si no hay victoria, comprobar muertes de aliados
+        if self.escenario.caballero.vida <= 0:
+            self.game_over = True
+            self.who_died = "Caballero"
+            # asegurar que la bandera de victoria esté desactivada
+            self.victoria = False
+            print("Game Over: Caballero muerto")
+            return
+
+        if self.escenario.curador.vida <= 0:
+            self.game_over = True
+            self.who_died = "Curador"
+            self.victoria = False
+            print("Game Over: Curador muerto")
+            return
+        
+    def iniciar(self):
+        self.app.MainLoop()
+        
+if __name__ == "__main__":
+    print("==Juego en 2 capas logica y vista==")
+    juego = VistaSimple()
+    juego.iniciar()
+    # Nota: para pruebas rápidas, puedes forzar la muerte del monstruo desde la consola
+    # modificando juego.escenario.monstruo.vida = 0 seguido de juego.panel.Refresh()
+
