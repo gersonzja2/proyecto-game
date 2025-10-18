@@ -10,6 +10,8 @@ except Exception:
 
 AUDIO_GAME = "audio_snake.mp3"
 
+#logica del juego
+
 class Escenario:
     def __init__(self):
         # Escenario contiene instancias de los personajes y los puntos de recompensa
