@@ -10,7 +10,6 @@ except Exception:
 
 AUDIO_GAME = "audio_snake.mp3"
 
-
 class VistaSimple:
     def __init__(self):
         self.app = wx.App()
