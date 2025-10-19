@@ -1,8 +1,8 @@
 import wx
 import time
-import random
 from pygame import mixer
 mixer.init()
+from logica import Escenario
 try:
     import winsound
 except Exception:
@@ -10,219 +10,7 @@ except Exception:
 
 AUDIO_GAME = "audio_snake.mp3"
 
-#logica del juego
 
-class Escenario:
-    def __init__(self):
-        # Escenario contiene instancias de los personajes y los puntos de recompensa
-        # usar nombres en minúsculas para consistencia
-        self.caballero = Caballero(250, 200, 500, 100)
-        self.monstruo = Monstruo(150, 100, 500, 100)
-        self.curador = Curador(350, 300, 500, 50)
-        # lista de recompensas: cada una es un dict {'x': int, 'y': int, 'valor': int}
-        self.recompensa = []
-        self.crear_recompensa(3)
-        # puntos por jugador (separados)
-        self.puntos_caballero = 0
-        self.puntos_curador = 0
-        self.ultimo_recogido = None  # (valor, quien, timestamp)
-        # puntos negros que benefician al monstruo
-        self.puntos_negros = []
-        self.crear_puntos_negros(2)
-        self.ultimo_punto_negro = None  # (incremento, timestamp)
-        # para efectos visuales
-        self.ultimo_recogido_pos = None
-        self.ultimo_punto_negro_pos = None
-        
-    def crear_recompensa(self, cantidad):
-        """Crear `cantidad` recompensas en posiciones aleatorias dentro del área visible.
-        Cada recompensa tiene un valor (puntos) pequeño.
-        """
-        ancho = 480
-        alto = 365
-        self.recompensa = []
-        for _ in range(cantidad):
-            self.recompensa.append(self.crear_una_recompensa())
-
-    def crear_una_recompensa(self):
-        """Genera y retorna una recompensa aleatoria (dict)."""
-        ancho = 480
-        alto = 365
-        x = random.randint(20, ancho - 20)
-        y = random.randint(20, alto - 20)
-        valor = random.choice([5, 10, 15])
-        return {'x': x, 'y': y, 'valor': valor}
-
-    def crear_un_punto_negro(self):
-        """Genera y retorna un punto negro que da beneficios al monstruo."""
-        ancho = 480
-        alto = 365
-        x = random.randint(20, ancho - 20)
-        y = random.randint(20, alto - 20)
-        incremento = random.choice([30, 50, 70])  # vida que añadirá
-        return {'x': x, 'y': y, 'inc': incremento}
-
-    def crear_puntos_negros(self, cantidad):
-        self.puntos_negros = []
-        for _ in range(cantidad):
-            self.puntos_negros.append(self.crear_un_punto_negro())
-
-    def detectar_colision(self, obj1, obj2):
-        """Detecta colisión aproximada entre dos objetos con atributos posicion_x y posicion_y.
-        Retorna True si la distancia euclidiana es menor o igual a 15 píxeles.
-        """
-        try:
-            dx = obj1.posicion_x - obj2['x'] if isinstance(obj2, dict) else obj1.posicion_x - obj2.posicion_x
-            dy = obj1.posicion_y - obj2['y'] if isinstance(obj2, dict) else obj1.posicion_y - obj2.posicion_y
-        except Exception:
-            return False
-        distancia2 = dx * dx + dy * dy
-        return distancia2 <= (15 * 15)
-
-    def manejar_colisiones(self):
-        """Revisar colisiones entre Caballero/Curador y las recompensas.
-        Si hay colisión, sumar puntos y eliminar la recompensa.
-        """
-        # Recorremos por índice para poder reemplazar recompensas consumidas
-        for i in range(len(self.recompensa)):
-            rec = self.recompensa[i]
-            if self.detectar_colision(self.caballero, rec):
-                # puntos para caballero
-                self.puntos_caballero += rec['valor']
-                # aumentar vida del caballero
-                self.caballero.vida = min(500, self.caballero.vida + rec['valor'])
-                # además aumentar defensa del caballero ligeramente según el valor de la recompensa
-                incremento_def = rec['valor'] // 2  # por ejemplo la mitad del valor
-                if hasattr(self.caballero, 'defensa'):
-                    self.caballero.defensa = min(300, self.caballero.defensa + incremento_def)
-                # registrar último recogido para mostrar mensaje (valor, quien, timestamp)
-                # registrar último recogido para mostrar mensaje (valor, quien, timestamp)
-                self.ultimo_recogido = (rec['valor'], 'Caballero', time.time())
-                # posición para efecto visual
-                self.ultimo_recogido_pos = (rec['x'], rec['y'])
-                # sonido
-                try:
-                    if winsound:
-                        winsound.Beep(1000, 120)
-                except Exception:
-                    pass
-                # reemplazar la recompensa consumida por una nueva aleatoria
-                self.recompensa[i] = self.crear_una_recompensa()
-            elif self.detectar_colision(self.curador, rec):
-                # puntos para curador
-                self.puntos_curador += rec['valor']
-                # aumentar vida del curador
-                self.curador.vida = min(500, self.curador.vida + rec['valor']//2)
-                # además aumentar el poder de curacion del curador
-                incremento_cur = rec['valor'] // 2
-                if hasattr(self.curador, 'poder_curacion'):
-                    self.curador.poder_curacion = min(200, self.curador.poder_curacion + incremento_cur)
-                self.ultimo_recogido = (rec['valor'], 'Curador', time.time())
-                self.ultimo_recogido_pos = (rec['x'], rec['y'])
-                try:
-                    if winsound:
-                        winsound.Beep(1000, 120)
-                except Exception:
-                    pass
-                self.recompensa[i] = self.crear_una_recompensa()
-
-        # manejar colisiones entre el monstruo y los puntos negros
-        for j in range(len(self.puntos_negros)):
-            pn = self.puntos_negros[j]
-            if self.detectar_colision(self.monstruo, pn):
-                inc = pn['inc']
-                # aumentar vida del monstruo
-                self.monstruo.vida = self.monstruo.vida + inc
-                # opcional: cap máximo para evitar valores extremos
-                if self.monstruo.vida > 2000:
-                    self.monstruo.vida = 2000
-                # registrar para mostrar mensaje en la vista
-                self.ultimo_punto_negro = (inc, time.time())
-                self.ultimo_punto_negro_pos = (pn['x'], pn['y'])
-                # sonido diferente
-                try:
-                    if winsound:
-                        winsound.Beep(650, 180)
-                except Exception:
-                    pass
-                # reemplazar el punto negro por uno nuevo
-                self.puntos_negros[j] = self.crear_un_punto_negro()
-
-class Personaje:
-    def __init__(self, x, y, vida):
-        self.posicion_x = x
-        self.posicion_y = y
-        self.vida = vida
-        self.salto = 5
-
-    def mover_arriba(self):
-        if (self.posicion_y > 0):
-            self.posicion_y -= self.salto
-        else:
-            self.posicion_y = 200
-
-    def mover_abajo(self):
-        if (self.posicion_y < 365):
-            self.posicion_y += self.salto
-        else:
-            self.posicion_y = 200
-
-    def mover_izquierda(self):
-        if (self.posicion_x > 0):
-            self.posicion_x -= self.salto
-        else:
-            self.posicion_x = 250
-
-    def mover_derecha(self):
-        if (self.posicion_x < 480):
-            self.posicion_x += self.salto
-        else:
-            self.posicion_x = 250
-
-class Monstruo(Personaje):
-    def __init__(self, x, y, vida, poder):
-        super().__init__(x, y, vida)
-        self.poder = poder
-        
-    def atacar_caballero(self, caballero):
-        if (self.poder < caballero.vida):
-            caballero.vida = caballero.vida - self.poder
-        else:
-            caballero.vida = 0
-            print("El caballero ha muerto")
-
-
-class Caballero(Personaje):
-    def __init__(self, x, y, vida, defensa):
-        super().__init__(x, y, vida)
-        self.defensa = defensa
-        
-    def atacar_monstruo(self, monstruo):
-        if (self.defensa < monstruo.vida):
-            monstruo.vida = monstruo.vida - self.defensa
-        else:
-            monstruo.vida = 0
-            print("El monstruo ha muerto")
-            
-class Curador(Personaje):
-    def __init__(self, x, y, vida, poder_curacion):
-        super().__init__(x, y, vida)
-        self.poder_curacion = poder_curacion
-        
-    def curar_caballero(self, caballero):
-        caballero.vida = caballero.vida + self.poder_curacion
-        if (caballero.vida > 500):
-            caballero.vida = 500
-        else:
-            print("El caballero ha sido curado")
-    
-    def envenenar_monstruo(self, monstruo):
-        if (self.poder_curacion < monstruo.vida):
-            monstruo.vida = monstruo.vida - self.poder_curacion
-        else:
-            monstruo.vida = 0
-            print("El monstruo ha muerto")
-            
 class VistaSimple:
     def __init__(self):
         self.app = wx.App()
@@ -239,7 +27,7 @@ class VistaSimple:
         # evento de pintado
         self.panel.Bind(wx.EVT_PAINT, self.on_paint)
 
-        # Logica del juego: usar la clase Escenario para unificar estado
+        # Lógica del juego: crear la instancia de Escenario (módulo separado)
         # reset_game creará la instancia de Escenario
         self.reset_game()
 
