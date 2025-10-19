@@ -1,5 +1,6 @@
 import wx
 import time
+import os
 from pygame import mixer
 mixer.init()
 from logica import Escenario
@@ -8,6 +9,9 @@ try:
 except Exception:
     winsound = None
 
+# archivo de música de fondo (reproducir en bucle)
+MEGALOVIA_FILE = "megalovia.mp3"
+# archivo de efecto corto para acciones (si se desea mantendremos compatibilidad)
 AUDIO_GAME = "audio_snake.mp3"
 
 class VistaSimple:
@@ -49,6 +53,18 @@ class VistaSimple:
         self.mensaje_contacto_until = 0.0  # timestamp unix en segundos
         # umbral (en píxeles) para considerar "contacto" con un punto
         self.contact_threshold = 10
+        # intentar iniciar música de fondo en bucle (no bloqueante)
+        try:
+            if os.path.exists(MEGALOVIA_FILE):
+                mixer.music.load(MEGALOVIA_FILE)
+                # loops=-1 hace que la música se repita indefinidamente
+                mixer.music.play(loops=-1)
+            else:
+                # si no existe, no hacemos nada; la vista puede seguir reproduciendo efectos
+                pass
+        except Exception:
+            # Si falla el mixer o el archivo, seguimos sin música
+            pass
 
     def reset_game(self):
         """Restablece el estado inicial del juego (personajes)."""
@@ -195,8 +211,18 @@ class VistaSimple:
             dc.DrawText(s2, (w - s2w) // 2, (h - s2h) // 2 + 30)
             
     def sound(self, archivo):
-        mixer.music.load(archivo)
-        mixer.music.play(loops=0)
+        # reproducir efectos cortos sin detener la música de fondo
+        try:
+            if os.path.exists(archivo):
+                s = mixer.Sound(archivo)
+                s.play()
+        except Exception:
+            # fallback: intentar reproducir con music (puede detener la pista de fondo)
+            try:
+                mixer.music.load(archivo)
+                mixer.music.play(loops=0)
+            except Exception:
+                pass
 
     def on_key_down(self, event):
         keycode = event.GetKeyCode()
