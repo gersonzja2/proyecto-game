@@ -1,6 +1,8 @@
 import random
 import time
 
+#Logica del juego
+
 class Personaje:
     def __init__(self, x, y, vida):
         self.posicion_x = x

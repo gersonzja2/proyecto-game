@@ -1,0 +1,5 @@
+preparacion sobre el juego
+
+v0.1 juego basado en pacman o dinosaurio de google
+
+flujo de trabajo basado en gitflow
