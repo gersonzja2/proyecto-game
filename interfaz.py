@@ -8,6 +8,8 @@ try:
     import winsound
 except Exception:
     winsound = None
+    
+#Interfaz del juego usando wxPython
 
 # archivo de música de fondo (reproducir en bucle)
 MEGALOVIA_FILE = "megalovia.mp3"
