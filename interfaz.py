@@ -252,7 +252,7 @@ class VistaSimple:
             self.escenario.caballero.mover_derecha()
             self.sound(AUDIO_GAME)
             self.escenario.caballero.mover_derecha()
-            self.sound("audio_snake.mp3")
+            self.sound(AUDIO_GAME)
         elif keycode == ord('X') or keycode == ord('x'):
             self.escenario.caballero.atacar_monstruo(self.escenario.monstruo)
         elif keycode == wx.WXK_UP:
