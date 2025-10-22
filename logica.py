@@ -69,6 +69,12 @@ class Curador(Personaje):
         if (caballero.vida > 500):
             caballero.vida = 500
 
+    def autocurarse(self):
+        """El curador se cura a sí mismo."""
+        self.vida = self.vida + self.poder_curacion
+        if (self.vida > 500):
+            self.vida = 500
+
     def envenenar_monstruo(self, monstruo):
         if (self.poder_curacion < monstruo.vida):
             monstruo.vida = monstruo.vida - self.poder_curacion
@@ -162,7 +168,8 @@ class Escenario:
                 self.recompensa[i] = self.crear_una_recompensa()
             elif self.detectar_colision(self.curador, rec):
                 self.puntos_curador += rec['valor']
-                self.curador.vida = min(500, self.curador.vida + rec['valor'] // 2)
+                # El curador se cura automáticamente al recoger puntos amarillos
+                self.curador.vida = min(500, self.curador.vida + rec['valor'])
                 incremento_cur = rec['valor'] // 2
                 if hasattr(self.curador, 'poder_curacion'):
                     self.curador.poder_curacion = min(200, self.curador.poder_curacion + incremento_cur)

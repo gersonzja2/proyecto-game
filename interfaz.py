@@ -81,6 +81,62 @@ class VistaSimple:
         # bandera que indica victoria (monstruo muerto)
         self.victoria = False
     
+    def dibujar_barra_vida(self, dc, personaje, vida_maxima, color):
+        """Dibuja una barra de vida sobre el personaje.
+        
+        Args:
+            dc: Device Context de wxPython
+            personaje: Objeto personaje con posicion_x, posicion_y y vida
+            vida_maxima: Vida máxima del personaje
+            color: Color de la barra (wx.Colour)
+        """
+        # Dimensiones de la barra
+        ancho_total = 50
+        alto_barra = 6
+        offset_y = -30  # Distancia sobre el personaje
+        
+        # Posición de la barra (centrada sobre el personaje)
+        x = personaje.posicion_x - ancho_total // 2
+        y = personaje.posicion_y + offset_y
+        
+        # Calcular ancho de la barra según vida actual
+        vida_actual = max(0, personaje.vida)
+        porcentaje_vida = vida_actual / vida_maxima
+        ancho_vida = int(ancho_total * porcentaje_vida)
+        
+        # Dibujar fondo de la barra (negro)
+        dc.SetPen(wx.Pen(wx.Colour(0, 0, 0), 1))
+        dc.SetBrush(wx.Brush(wx.Colour(40, 40, 40)))
+        dc.DrawRectangle(x, y, ancho_total, alto_barra)
+        
+        # Dibujar vida actual
+        if vida_actual > 0:
+            # Color cambia según el porcentaje de vida
+            if porcentaje_vida > 0.6:
+                color_barra = color
+            elif porcentaje_vida > 0.3:
+                # Advertencia (amarillo/naranja)
+                color_barra = wx.Colour(255, 200, 0)
+            else:
+                # Crítico (rojo)
+                color_barra = wx.Colour(255, 50, 50)
+            
+            dc.SetBrush(wx.Brush(color_barra))
+            dc.DrawRectangle(x, y, ancho_vida, alto_barra)
+        
+        # Dibujar borde de la barra
+        dc.SetPen(wx.Pen(wx.Colour(255, 255, 255), 1))
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        dc.DrawRectangle(x, y, ancho_total, alto_barra)
+        
+        # Mostrar valor numérico de vida
+        dc.SetTextForeground(wx.Colour(255, 255, 255))
+        font_small = wx.Font(7, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        dc.SetFont(font_small)
+        texto_vida = f"{int(vida_actual)}"
+        tw, th = dc.GetTextExtent(texto_vida)
+        dc.DrawText(texto_vida, x + (ancho_total - tw) // 2, y - th - 2)
+    
     def on_paint(self, event):
         dc = wx.PaintDC(self.panel)
         dc.SetBackground(wx.Brush(wx.Colour(255, 255, 255)))
@@ -96,6 +152,9 @@ class VistaSimple:
         color_verde = max(0, min(255, int(255 * vida_porcentaje)))
         dc.SetBrush(wx.Brush(wx.Colour(0, color_verde, 0)))
         dc.DrawCircle(self.escenario.caballero.posicion_x, self.escenario.caballero.posicion_y, 20)
+        
+        # Barra de vida del caballero
+        self.dibujar_barra_vida(dc, self.escenario.caballero, 500, wx.Colour(0, 255, 0))
 
         # Dibujar monstruo - Rojo que se opaca con la pérdida de vida
         vida_porcentaje = self.escenario.monstruo.vida / 500
@@ -104,12 +163,19 @@ class VistaSimple:
         # variar el radio del monstruo según su vida (más vida -> mayor tamaño)
         radio_monstruo = 20 + int(self.escenario.monstruo.vida / 200)
         dc.DrawCircle(self.escenario.monstruo.posicion_x, self.escenario.monstruo.posicion_y, radio_monstruo)
+        
+        # Barra de vida del monstruo (vida máxima puede ser hasta 2000)
+        vida_max_monstruo = max(500, self.escenario.monstruo.vida)
+        self.dibujar_barra_vida(dc, self.escenario.monstruo, vida_max_monstruo, wx.Colour(255, 0, 0))
 
         # Dibujar curador - Azul que se opaca con la pérdida de vida
         vida_porcentaje = self.escenario.curador.vida / 500
         color_azul = max(0, min(255, int(255 * vida_porcentaje)))
         dc.SetBrush(wx.Brush(wx.Colour(0, 0, color_azul)))
         dc.DrawCircle(self.escenario.curador.posicion_x, self.escenario.curador.posicion_y, 20)
+        
+        # Barra de vida del curador
+        self.dibujar_barra_vida(dc, self.escenario.curador, 500, wx.Colour(0, 100, 255))
 
         # Dibujar recompensas actuales
         for rec in self.escenario.recompensa:
@@ -176,7 +242,7 @@ class VistaSimple:
 
         # Mostrar instrucciones de ataque y curacion
         dc.DrawText("WASD: Mover Caballero, X: Atacar Monstruo", 10, 120)
-        dc.DrawText("Flechas: Mover Curador, Y: Curar Caballero, T: Envenenar Monstruo", 10, 140)
+        dc.DrawText("Flechas: Mover Curador, Y: Curar Caballero, U: Autocuración, T: Envenenar Monstruo", 10, 140)
         dc.DrawText("IJKL: Mover Monstruo, M: Atacar Caballero, N: Atacar Curador", 10, 160)
         dc.DrawText("ESC: Salir", 10, 180)
 
@@ -271,6 +337,8 @@ class VistaSimple:
             self.escenario.curador.mover_derecha()
         elif keycode == ord('Y') or keycode == ord('y'):
             self.escenario.curador.curar_caballero(self.escenario.caballero)
+        elif keycode == ord('U') or keycode == ord('u'):
+            self.escenario.curador.autocurarse()
         elif keycode == ord('T') or keycode == ord('t'):
             self.escenario.curador.envenenar_monstruo(self.escenario.monstruo)
         elif keycode == ord('I') or keycode == ord('i'):
