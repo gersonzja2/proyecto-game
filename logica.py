@@ -14,25 +14,25 @@ class Personaje:
         if (self.posicion_y > 0):
             self.posicion_y -= self.salto
         else:
-            self.posicion_y = 200
+            self.posicion_y = 300
 
     def mover_abajo(self):
-        if (self.posicion_y < 365):
+        if (self.posicion_y < 565):  # 600 - 35 margen
             self.posicion_y += self.salto
         else:
-            self.posicion_y = 200
+            self.posicion_y = 300
 
     def mover_izquierda(self):
         if (self.posicion_x > 0):
             self.posicion_x -= self.salto
         else:
-            self.posicion_x = 250
+            self.posicion_x = 400
 
     def mover_derecha(self):
-        if (self.posicion_x < 480):
+        if (self.posicion_x < 780):  # 800 - 20 margen
             self.posicion_x += self.salto
         else:
-            self.posicion_x = 250
+            self.posicion_x = 400
 
 
 class Monstruo(Personaje):
@@ -83,16 +83,16 @@ class Escenario:
     el estado del juego y actualizar la interfaz.
     """
     def __init__(self):
-        # personajes
-        self.caballero = Caballero(250, 200, 500, 100)
-        self.monstruo = Monstruo(150, 100, 500, 100)
-        self.curador = Curador(350, 300, 500, 50)
+        # personajes - posiciones ajustadas para 800x600
+        self.caballero = Caballero(400, 300, 500, 100)
+        self.monstruo = Monstruo(250, 150, 500, 100)
+        self.curador = Curador(550, 450, 500, 50)
 
         # recompensas y puntos negros
         self.recompensa = []
-        self.crear_recompensa(3)
+        self.crear_recompensa(8)  # Más puntos amarillos
         self.puntos_negros = []
-        self.crear_puntos_negros(2)
+        self.crear_puntos_negros(6)  # Más puntos negros
 
         # estadísticas
         self.puntos_caballero = 0
@@ -105,23 +105,23 @@ class Escenario:
         self.ultimo_punto_negro_pos = None
 
     def crear_recompensa(self, cantidad):
-        ancho = 480
-        alto = 365
+        ancho = 780  # 800 - 20 margen
+        alto = 565   # 600 - 35 margen
         self.recompensa = []
         for _ in range(cantidad):
             self.recompensa.append(self.crear_una_recompensa())
 
     def crear_una_recompensa(self):
-        ancho = 480
-        alto = 365
+        ancho = 780
+        alto = 565
         x = random.randint(20, ancho - 20)
         y = random.randint(20, alto - 20)
         valor = random.choice([5, 10, 15])
         return {'x': x, 'y': y, 'valor': valor}
 
     def crear_un_punto_negro(self):
-        ancho = 480
-        alto = 365
+        ancho = 780
+        alto = 565
         x = random.randint(20, ancho - 20)
         y = random.randint(20, alto - 20)
         incremento = random.choice([30, 50, 70])

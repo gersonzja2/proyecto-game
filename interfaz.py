@@ -19,8 +19,8 @@ AUDIO_GAME = "audio_snake.mp3"
 class VistaSimple:
     def __init__(self):
         self.app = wx.App()
-        # esta usando objetos visuales de wxPython
-        self.ventana = wx.Frame(None, title="Juego", size=wx.Size(500, 400))
+        # Ventana ajustada a 800x600
+        self.ventana = wx.Frame(None, title="Juego", size=wx.Size(800, 600))
         self.panel = wx.Panel(self.ventana)
         # reutilizando los eventos de teclado y de dibujar en pantalla
         # Usar EVT_CHAR_HOOK en el frame garantiza recibir teclas especiales (flechas, etc.) incluso si el foco
@@ -86,10 +86,10 @@ class VistaSimple:
         dc.SetBackground(wx.Brush(wx.Colour(255, 255, 255)))
         dc.Clear()
 
-        # Mostrar posición del caballero/monstruo/curador
-        dc.DrawText(f"X: {self.escenario.caballero.posicion_x}, Y: {self.escenario.caballero.posicion_y}", 400, 40)
-        dc.DrawText(f"X: {self.escenario.monstruo.posicion_x}, Y: {self.escenario.monstruo.posicion_y}", 400, 60)
-        dc.DrawText(f"X: {self.escenario.curador.posicion_x}, Y: {self.escenario.curador.posicion_y}", 400, 80)
+        # Mostrar posición del caballero/monstruo/curador - ajustadas para ventana más grande
+        dc.DrawText(f"X: {self.escenario.caballero.posicion_x}, Y: {self.escenario.caballero.posicion_y}", 650, 60)
+        dc.DrawText(f"X: {self.escenario.monstruo.posicion_x}, Y: {self.escenario.monstruo.posicion_y}", 650, 80)
+        dc.DrawText(f"X: {self.escenario.curador.posicion_x}, Y: {self.escenario.curador.posicion_y}", 650, 100)
 
         # Dibujar caballero - Verde que se opaca con la pérdida de vida
         vida_porcentaje = self.escenario.caballero.vida / 500  # 500 es la vida máxima
@@ -139,7 +139,7 @@ class VistaSimple:
             valor, quien, ts = self.escenario.ultimo_recogido
             if time.time() - ts < 1.0:
                 dc.SetTextForeground(wx.Colour(255, 0, 255))
-                dc.DrawText(f"{quien} +{valor} pts!", 250, 10)
+                dc.DrawText(f"{quien} +{valor} pts!", 350, 10)
             else:
                 self.escenario.ultimo_recogido = None
 
@@ -148,7 +148,7 @@ class VistaSimple:
             inc, ts2 = self.escenario.ultimo_punto_negro
             if time.time() - ts2 < 1.0:
                 dc.SetTextForeground(wx.Colour(0, 0, 0))
-                dc.DrawText(f"Monstruo +{inc} vida!", 250, 30)
+                dc.DrawText(f"Monstruo +{inc} vida!", 350, 30)
             else:
                 self.escenario.ultimo_punto_negro = None
 
@@ -166,19 +166,19 @@ class VistaSimple:
                     dc.SetBrush(wx.Brush(wx.Colour(0, 0, 0)))
                 dc.DrawCircle(x, y, rx)
 
-    # Mostrar vidas y puntos
+        # Mostrar vidas y puntos
         dc.SetTextForeground(wx.Colour(0, 0, 0))
         dc.DrawText(f"Vida Caballero: {self.escenario.caballero.vida}", 10, 60)
         dc.DrawText(f"Vida Monstruo: {self.escenario.monstruo.vida}", 10, 40)
         dc.DrawText(f"Vida Curador: {self.escenario.curador.vida}", 10, 80)
-        dc.DrawText(f"Puntos Caballero: {self.escenario.puntos_caballero}", 10, 180)
-        dc.DrawText(f"Puntos Curador: {self.escenario.puntos_curador}", 10, 200)
+        dc.DrawText(f"Puntos Caballero: {self.escenario.puntos_caballero}", 10, 220)
+        dc.DrawText(f"Puntos Curador: {self.escenario.puntos_curador}", 10, 240)
 
         # Mostrar instrucciones de ataque y curacion
-        dc.DrawText("WASD: Mover Caballero, X: Atacar Monstruo", 10, 100)
-        dc.DrawText("Flechas: Mover Curador, Y: Curar Caballero, T: Envenenar Monstruo", 10, 120)
-        dc.DrawText("IJKL: Mover Monstruo, M: Atacar Caballero, N: Atacar Curador", 10, 140)
-        dc.DrawText("ESC: Salir", 10, 160)
+        dc.DrawText("WASD: Mover Caballero, X: Atacar Monstruo", 10, 120)
+        dc.DrawText("Flechas: Mover Curador, Y: Curar Caballero, T: Envenenar Monstruo", 10, 140)
+        dc.DrawText("IJKL: Mover Monstruo, M: Atacar Caballero, N: Atacar Curador", 10, 160)
+        dc.DrawText("ESC: Salir", 10, 180)
 
         # Si el juego terminó mostrar pantalla Game Over o Victoria encima
         if self.game_over:
@@ -338,6 +338,3 @@ if __name__ == "__main__":
     print("==Juego en 2 capas logica y vista==")
     juego = VistaSimple()
     juego.iniciar()
-    # Nota: para pruebas rápidas, puedes forzar la muerte del monstruo desde la consola
-    # modificando juego.escenario.monstruo.vida = 0 seguido de juego.panel.Refresh()
-
